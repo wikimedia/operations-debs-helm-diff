@@ -56,7 +56,6 @@ func New() *cobra.Command {
 	cmd.AddCommand(
 		revisionCmd(),
 		rollbackCmd(),
-		releaseCmd(),
 	)
 	cmd.SetHelpCommand(&cobra.Command{}) // Disable the help command
 	return cmd
