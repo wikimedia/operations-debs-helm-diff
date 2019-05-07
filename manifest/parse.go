@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 	"k8s.io/helm/pkg/proto/hapi/release"
 )
 
@@ -61,13 +61,9 @@ func splitSpec(token string) (string, string) {
 	return "", ""
 }
 
-func ParseRelease(release *release.Release, includeTests bool) map[string]*MappingResult {
+func ParseRelease(release *release.Release) map[string]*MappingResult {
 	manifest := release.Manifest
 	for _, hook := range release.Hooks {
-		if !includeTests && isTestHook(hook.Events) {
-			continue
-		}
-
 		manifest += "\n---\n"
 		manifest += fmt.Sprintf("# Source: %s\n", hook.Path)
 		manifest += hook.Manifest
@@ -90,40 +86,24 @@ func Parse(manifest string, defaultNamespace string) map[string]*MappingResult {
 		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		var parsedMetadata metadata
-		if err := yaml.Unmarshal([]byte(content), &parsedMetadata); err != nil {
+		var metadata metadata
+		if err := yaml.Unmarshal([]byte(content), &metadata); err != nil {
 			log.Fatalf("YAML unmarshal error: %s\nCan't unmarshal %s", err, content)
 		}
-
-		//Skip content without any metadata.  It is probably a template that
-		//only contains comments in the current state.
-		if (metadata{}) == parsedMetadata {
-			continue
+		if metadata.Metadata.Namespace == "" {
+			metadata.Metadata.Namespace = defaultNamespace
 		}
-
-		if parsedMetadata.Metadata.Namespace == "" {
-			parsedMetadata.Metadata.Namespace = defaultNamespace
-		}
-		name := parsedMetadata.String()
+		name := metadata.String()
 		if _, ok := result[name]; ok {
 			log.Printf("Error: Found duplicate key %#v in manifest", name)
 		} else {
 			result[name] = &MappingResult{
 				Name:    name,
-				Kind:    parsedMetadata.Kind,
+				Kind:    metadata.Kind,
 				Content: content,
 			}
 		}
 	}
 	return result
-}
 
-func isTestHook(hookEvents []release.Hook_Event) bool {
-	for _, event := range hookEvents {
-		if event == release.Hook_RELEASE_TEST_FAILURE || event == release.Hook_RELEASE_TEST_SUCCESS {
-			return true
-		}
-	}
-
-	return false
 }
