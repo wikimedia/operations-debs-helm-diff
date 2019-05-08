@@ -1,0 +1,30 @@
+Description: changing path of helm-diff to use /usr/bin
+ .
+ helm-diff (2.11.0+3-1) buster; urgency=medium
+ .
+   * Initial WMF debianization.
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: https://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: 2019-05-08
+
+--- helm-diff-2.11.0+3.orig/plugin.yaml
++++ helm-diff-2.11.0+3/plugin.yaml
+@@ -5,7 +5,4 @@ version: "2.11.0+3"
+ usage: "Preview helm upgrade changes as a diff"
+ description: "Preview helm upgrade changes as a diff"
+ useTunnel: true
+-command: "$HELM_PLUGIN_DIR/bin/diff"
+-hooks:
+-  install: "$HELM_PLUGIN_DIR/install-binary.sh"
+-  update: "$HELM_PLUGIN_DIR/install-binary.sh"
++command: "/usr/bin/helm-diff"

@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --buildsystem=golang --with=golang
+
+override_dh_auto_install:
+	cp $(CURDIR)/plugin.yaml debian/helm-diff/etc/helm/plugins/helm-diff/.
+	dh_auto_install

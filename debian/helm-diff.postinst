@@ -1,0 +1,6 @@
+#!/bin/sh
+
+mkdir -p /etc/helm/plugins/
+ln -s /usr/share/gocode/src/github.com/databus23/helm-diff /etc/helm/plugins/helm-diff
+mkdir -p /etc/helm/plugins/helm-diff/bin
+ln -s /usr/bin/helm-diff /etc/helm/plugins/helm-diff/bin/helm-diff
