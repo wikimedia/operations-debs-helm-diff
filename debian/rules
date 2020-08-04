@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/pkg-info.mk
+
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+export DH_VERBOSE = 1
+export DEB_BUILD_OPTIONS = noddebs
+export DH_GOLANG_EXCLUDES := vendor
+export DH_GOLANG_BUILDPKG := github.com/databus23/helm-diff
+HELM_VERSION = $(shell ./scripts/dep-helm-version.sh)
+
+BUILDFLAGS := -ldflags \
+  " -X github.com/databus23/helm-diff/cmd.Version=$(DEB_VERSION_UPSTREAM)\
+    -X k8s.io/helm/pkg/version.Version=$(HELM_VERSION)\
+    -X k8s.io/helm/pkg/version.BuildMetadata="
+
+%:
+	dh $@ --buildsystem=golang --with=golang
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(BUILDFLAGS)
+
+override_dh_auto_build:
+	dh_auto_build -- $(BUILDFLAGS)
+
+override_dh_auto_install:
+	dh_auto_install -- --no-source
+
+# No dwz symbols in go, disable
+override_dh_dwz:
+

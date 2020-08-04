@@ -1,0 +1,26 @@
+helm-diff (3.1.2-0) buster-wikimedia; urgency=medium
+
+  * New upstream version 3.1.2
+
+ -- Janis Meybohm <jmeybohm@wikimedia.org>  Tue, 04 Aug 2020 14:55:18 +0200
+
+helm-diff (2.11.0+3-2) buster; urgency=medium
+
+  [changelog]
+  * Fix previous changelog entry causing fault in dch
+  [control]
+  * Source package can not have a Depends: field
+  * Add full name in Uploaders
+  * Remove trailing spaces in description.
+  [gbp.conf]
+  * set debian-branch to debian/stretch-wikimedia
+
+  * Unapply debian patches and remove .pc directory.
+
+ -- Antoine Musso <hashar@free.fr>  Fri, 24 May 2019 08:39:20 +0200
+
+helm-diff (2.11.0+3-1) buster; urgency=medium
+
+  * Initial WMF debianization.
+
+ -- Fabián Selés <fsero@wikimedia.org>  Wed, 10 Apr 2019 17:00:23 +0200

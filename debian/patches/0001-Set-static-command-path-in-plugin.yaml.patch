@@ -1,0 +1,24 @@
+From: Janis Meybohm <jmeybohm@wikimedia.org>
+Date: Tue, 4 Aug 2020 15:36:11 +0200
+Subject: Set static command path in plugin.yaml
+
+Also remove install and update hooks as we don't use/support them.
+
+Change-Id: I1532a80a72b75c4360754ca46f5dc8a73d160733
+---
+ plugin.yaml | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/plugin.yaml b/plugin.yaml
+index 17e3e41..188f08a 100644
+--- a/plugin.yaml
++++ b/plugin.yaml
+@@ -5,7 +5,4 @@ version: "3.1.2"
+ usage: "Preview helm upgrade changes as a diff"
+ description: "Preview helm upgrade changes as a diff"
+ useTunnel: true
+-command: "$HELM_PLUGIN_DIR/bin/diff"
+-hooks:
+-  install: "$HELM_PLUGIN_DIR/install-binary.sh"
+-  update: "$HELM_PLUGIN_DIR/install-binary.sh"
++command: "/usr/bin/helm-diff"

@@ -1,0 +1,26 @@
+Source: helm-diff
+Section: devel
+Priority: optional
+Maintainer: Wikimedia Service Operations Go Team <sre-service-ops@wikimedia.org>
+Build-Depends: debhelper-compat (= 12),
+               dh-golang,
+               golang-any (>= 2:1.13),
+               git,
+Standards-Version: 4.1.3
+Homepage: https://github.com/databus23/helm-diff
+XS-Go-Import-Path: github.com/databus23/helm-diff
+Testsuite: autopkgtest-pkg-go
+
+Package: helm-diff
+Architecture: any
+Built-Using: ${misc:Built-Using}
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         helm (>=2.12.2-1)
+Description: This is a Helm plugin giving your a preview of what
+ a helm upgrade would change.
+ .
+ Helm-diff is a helm plugin that generates a diff between the latest
+ deployed version of a release and a helm upgrade --debug --dry-run.
+ This can also be used to compare two revisions/versions of your helm
+ release.
