@@ -1,18 +1,19 @@
 HELM_HOME ?= $(shell helm home)
-HAS_GLIDE := $(shell command -v glide;)
 VERSION := $(shell sed -n -e 's/version:[ "]*\([^"]*\).*/\1/p' plugin.yaml)
+
+HELM_3_PLUGINS := $(shell bash -c 'eval $$(helm env); echo $$HELM_PLUGINS')
 
 PKG:= github.com/databus23/helm-diff
 LDFLAGS := -X $(PKG)/cmd.Version=$(VERSION)
 
 # Clear the "unreleased" string in BuildMetadata
-LDFLAGS += -X $(PKG)/vendor/k8s.io/helm/pkg/version.BuildMetadata=
-LDFLAGS += -X $(PKG)/vendor/k8s.io/helm/pkg/version.Version=$(shell grep -A1 "package: k8s.io/helm" glide.yaml | sed -n -e 's/[ ]*version:.*\(v[.0-9]*\).*/\1/p')
+LDFLAGS += -X k8s.io/helm/pkg/version.BuildMetadata=
+LDFLAGS += -X k8s.io/helm/pkg/version.Version=$(shell ./scripts/dep-helm-version.sh)
 
 .PHONY: format
 format:
-	test -z "$$(find . -path ./vendor -prune -type f -o -name '*.go' -exec gofmt -d {} + | tee /dev/stderr)" || \
-	test -z "$$(find . -path ./vendor -prune -type f -o -name '*.go' -exec gofmt -w {} + | tee /dev/stderr)"
+	test -z "$$(find . -type f -o -name '*.go' -exec gofmt -d {} + | tee /dev/stderr)" || \
+	test -z "$$(find . -type f -o -name '*.go' -exec gofmt -w {} + | tee /dev/stderr)"
 
 .PHONY: install
 install: build
@@ -20,8 +21,21 @@ install: build
 	cp bin/diff $(HELM_HOME)/plugins/helm-diff/bin
 	cp plugin.yaml $(HELM_HOME)/plugins/helm-diff/
 
+.PHONY: install/helm3
+install/helm3:
+	mkdir -p $(HELM_3_PLUGINS)/helm-diff/bin
+	cp bin/diff $(HELM_3_PLUGINS)/helm-diff/bin
+	cp plugin.yaml $(HELM_3_PLUGINS)/helm-diff/
+
+.PHONY: lint
+lint:
+	scripts/update-gofmt.sh
+	scripts/verify-gofmt.sh
+	scripts/verify-golint.sh
+	scripts/verify-govet.sh
+
 .PHONY: build
-build:
+build: lint
 	mkdir -p bin/
 	go build -i -v -o bin/diff -ldflags="$(LDFLAGS)"
 
@@ -31,13 +45,19 @@ test:
 
 .PHONY: bootstrap
 bootstrap:
-ifndef HAS_GLIDE
-	go get -u github.com/Masterminds/glide
-endif
-	glide install --strip-vendor
+	go mod download
+	command -v golint || GO111MODULE=off go get -u golang.org/x/lint/golint
+
+.PHONY: docker-run-release
+docker-run-release: export pkg=/go/src/github.com/databus23/helm-diff
+docker-run-release:
+	git checkout master
+	git push
+	docker run -it --rm -e GITHUB_TOKEN -v $(shell pwd):$(pkg) -w $(pkg) golang:1.13.3 make bootstrap release
 
 .PHONY: dist
 dist: export COPYFILE_DISABLE=1 #teach OSX tar to not put ._* files in tar archive
+dist: export CGO_ENABLED=0
 dist:
 	rm -rf build/diff/* release/*
 	mkdir -p build/diff/bin release/
@@ -53,9 +73,14 @@ dist:
 	tar -C build/ -zcvf $(CURDIR)/release/helm-diff-windows.tgz diff/
 
 .PHONY: release
-release: dist
+release: lint dist
 ifndef GITHUB_TOKEN
 	$(error GITHUB_TOKEN is undefined)
 endif
-	git push
-	github-release databus23/helm-diff v$(VERSION) master "v$(VERSION)" "release/*"
+	scripts/release.sh v$(VERSION) master
+
+# Test for the plugin installation with `helm plugin install -v THIS_BRANCH` works
+# Useful for verifying modified `install-binary.sh` still works against various environments
+.PHONY: test-plugin-installation
+test-plugin-installation:
+	docker build -f testdata/Dockerfile.install .

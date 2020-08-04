@@ -12,7 +12,7 @@ import (
 
 func foundObjects(result map[string]*MappingResult) []string {
 	objs := make([]string, 0, len(result))
-	for k, _ := range result {
+	for k := range result {
 		objs = append(objs, k)
 	}
 	sort.Strings(objs)
@@ -39,6 +39,26 @@ func TestPodNamespace(t *testing.T) {
 	)
 }
 
+func TestPodHook(t *testing.T) {
+	spec, err := ioutil.ReadFile("testdata/pod_hook.yaml")
+	require.NoError(t, err)
+
+	require.Equal(t,
+		[]string{"default, nginx, Pod (v1)"},
+		foundObjects(Parse(string(spec), "default")),
+	)
+
+	require.Equal(t,
+		[]string{"default, nginx, Pod (v1)"},
+		foundObjects(Parse(string(spec), "default", "test-success")),
+	)
+
+	require.Equal(t,
+		[]string{},
+		foundObjects(Parse(string(spec), "default", "test")),
+	)
+}
+
 func TestDeployV1(t *testing.T) {
 	spec, err := ioutil.ReadFile("testdata/deploy_v1.yaml")
 	require.NoError(t, err)
@@ -55,6 +75,16 @@ func TestDeployV1Beta1(t *testing.T) {
 
 	require.Equal(t,
 		[]string{"default, nginx, Deployment (apps)"},
+		foundObjects(Parse(string(spec), "default")),
+	)
+}
+
+func TestEmpty(t *testing.T) {
+	spec, err := ioutil.ReadFile("testdata/empty.yaml")
+	require.NoError(t, err)
+
+	require.Equal(t,
+		[]string{},
 		foundObjects(Parse(string(spec), "default")),
 	)
 }

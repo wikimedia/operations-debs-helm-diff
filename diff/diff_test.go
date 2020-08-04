@@ -2,6 +2,7 @@ package diff
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/mgutz/ansi"
@@ -127,9 +128,9 @@ func assertDiff(t *testing.T, before, after string, context int, expected string
 	}
 }
 
-func TestDiffManifests(t *testing.T) {
+func TestManifests(t *testing.T) {
 	specBeta := map[string]*manifest.MappingResult{
-		"default, nginx, Deployment (apps)": &manifest.MappingResult{
+		"default, nginx, Deployment (apps)": {
 
 			Name: "default, nginx, Deployment (apps)",
 			Kind: "Deployment",
@@ -142,7 +143,7 @@ metadata:
 		}}
 
 	specRelease := map[string]*manifest.MappingResult{
-		"default, nginx, Deployment (apps)": &manifest.MappingResult{
+		"default, nginx, Deployment (apps)": {
 
 			Name: "default, nginx, Deployment (apps)",
 			Kind: "Deployment",
@@ -158,8 +159,8 @@ metadata:
 
 		var buf1 bytes.Buffer
 
-		if changesSeen := DiffManifests(specBeta, specRelease, []string{}, 10, &buf1); !changesSeen {
-			t.Error("Unexpected return value from DiffManifests: Expected the return value to be `true` to indicate that it has seen any change(s), but was `false`")
+		if changesSeen := Manifests(specBeta, specRelease, []string{}, true, 10, "diff", &buf1); !changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `true` to indicate that it has seen any change(s), but was `false`")
 		}
 
 		require.Equal(t, `default, nginx, Deployment (apps) has changed:
@@ -176,10 +177,89 @@ metadata:
 	t.Run("OnNoChange", func(t *testing.T) {
 		var buf2 bytes.Buffer
 
-		if changesSeen := DiffManifests(specRelease, specRelease, []string{}, 10, &buf2); changesSeen {
-			t.Error("Unexpected return value from DiffManifests: Expected the return value to be `false` to indicate that it has NOT seen any change(s), but was `true`")
+		if changesSeen := Manifests(specRelease, specRelease, []string{}, true, 10, "diff", &buf2); changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `false` to indicate that it has NOT seen any change(s), but was `true`")
 		}
 
 		require.Equal(t, ``, buf2.String())
+	})
+
+	t.Run("OnChangeSimple", func(t *testing.T) {
+
+		var buf1 bytes.Buffer
+
+		if changesSeen := Manifests(specBeta, specRelease, []string{}, true, 10, "simple", &buf1); !changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `true` to indicate that it has seen any change(s), but was `false`")
+		}
+
+		require.Equal(t, `default, nginx, Deployment (apps) to be changed.
+Plan: 0 to add, 1 to change, 0 to destroy.
+`, buf1.String())
+	})
+
+	t.Run("OnNoChangeSimple", func(t *testing.T) {
+		var buf2 bytes.Buffer
+
+		if changesSeen := Manifests(specRelease, specRelease, []string{}, true, 10, "simple", &buf2); changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `false` to indicate that it has NOT seen any change(s), but was `true`")
+		}
+
+		require.Equal(t, "Plan: 0 to add, 0 to change, 0 to destroy.\n", buf2.String())
+	})
+
+	t.Run("OnChangeTemplate", func(t *testing.T) {
+
+		var buf1 bytes.Buffer
+
+		if changesSeen := Manifests(specBeta, specRelease, []string{}, true, 10, "template", &buf1); !changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `true` to indicate that it has seen any change(s), but was `false`")
+		}
+
+		require.Equal(t, `[{
+  "api": "apps",
+  "kind": "Deployment",
+  "namespace": "default",
+  "name": "nginx",
+  "change": "MODIFY"
+}]
+`, buf1.String())
+	})
+
+	t.Run("OnChangeJSON", func(t *testing.T) {
+
+		var buf1 bytes.Buffer
+
+		if changesSeen := Manifests(specBeta, specRelease, []string{}, true, 10, "json", &buf1); !changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `true` to indicate that it has seen any change(s), but was `false`")
+		}
+
+		require.Equal(t, `[{
+  "api": "apps",
+  "kind": "Deployment",
+  "namespace": "default",
+  "name": "nginx",
+  "change": "MODIFY"
+}]
+`, buf1.String())
+	})
+
+	t.Run("OnNoChangeTemplate", func(t *testing.T) {
+		var buf2 bytes.Buffer
+
+		if changesSeen := Manifests(specRelease, specRelease, []string{}, true, 10, "template", &buf2); changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `false` to indicate that it has NOT seen any change(s), but was `true`")
+		}
+
+		require.Equal(t, "[]\n", buf2.String())
+	})
+
+	t.Run("OnChangeCustomTemplate", func(t *testing.T) {
+		var buf1 bytes.Buffer
+		os.Setenv("HELM_DIFF_TPL", "testdata/customTemplate.tpl")
+		if changesSeen := Manifests(specBeta, specRelease, []string{}, true, 10, "template", &buf1); !changesSeen {
+			t.Error("Unexpected return value from Manifests: Expected the return value to be `false` to indicate that it has NOT seen any change(s), but was `true`")
+		}
+
+		require.Equal(t, "Resource name: nginx\n", buf1.String())
 	})
 }

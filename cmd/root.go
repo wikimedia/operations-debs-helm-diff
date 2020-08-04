@@ -25,6 +25,7 @@ The Helm Diff Plugin
   helm rollback will perform.
 `
 
+// New creates a new cobra client
 func New() *cobra.Command {
 
 	chartCommand := newChartCommand()
@@ -56,6 +57,7 @@ func New() *cobra.Command {
 	cmd.AddCommand(
 		revisionCmd(),
 		rollbackCmd(),
+		releaseCmd(),
 	)
 	cmd.SetHelpCommand(&cobra.Command{}) // Disable the help command
 	return cmd

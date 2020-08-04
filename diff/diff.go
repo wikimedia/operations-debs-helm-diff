@@ -1,54 +1,147 @@
 package diff
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/aryann/difflib"
 	"github.com/mgutz/ansi"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/databus23/helm-diff/manifest"
 )
 
-func DiffManifests(oldIndex, newIndex map[string]*manifest.MappingResult, suppressedKinds []string, context int, to io.Writer) bool {
+// Manifests diff on manifests
+func Manifests(oldIndex, newIndex map[string]*manifest.MappingResult, suppressedKinds []string, showSecrets bool, context int, output string, to io.Writer) bool {
+	report.setupReportFormat(output)
 	seenAnyChanges := false
 	emptyMapping := &manifest.MappingResult{}
 	for key, oldContent := range oldIndex {
 		if newContent, ok := newIndex[key]; ok {
 			if oldContent.Content != newContent.Content {
 				// modified
-				fmt.Fprintf(to, ansi.Color("%s has changed:", "yellow")+"\n", key)
+				if !showSecrets {
+					redactSecrets(oldContent, newContent)
+				}
+
 				diffs := diffMappingResults(oldContent, newContent)
 				if len(diffs) > 0 {
 					seenAnyChanges = true
 				}
-				printDiffRecords(suppressedKinds, oldContent.Kind, context, diffs, to)
+				report.addEntry(key, suppressedKinds, oldContent.Kind, context, diffs, "MODIFY")
 			}
 		} else {
 			// removed
-			fmt.Fprintf(to, ansi.Color("%s has been removed:", "yellow")+"\n", key)
+			if !showSecrets {
+				redactSecrets(oldContent, nil)
+
+			}
 			diffs := diffMappingResults(oldContent, emptyMapping)
 			if len(diffs) > 0 {
 				seenAnyChanges = true
 			}
-			printDiffRecords(suppressedKinds, oldContent.Kind, context, diffs, to)
+			report.addEntry(key, suppressedKinds, oldContent.Kind, context, diffs, "REMOVE")
 		}
 	}
 
 	for key, newContent := range newIndex {
 		if _, ok := oldIndex[key]; !ok {
 			// added
-			fmt.Fprintf(to, ansi.Color("%s has been added:", "yellow")+"\n", key)
+			if !showSecrets {
+				redactSecrets(nil, newContent)
+			}
 			diffs := diffMappingResults(emptyMapping, newContent)
 			if len(diffs) > 0 {
 				seenAnyChanges = true
 			}
-			printDiffRecords(suppressedKinds, newContent.Kind, context, diffs, to)
+			report.addEntry(key, suppressedKinds, newContent.Kind, context, diffs, "ADD")
 		}
 	}
+	report.print(to)
+	report.clean()
 	return seenAnyChanges
+}
+
+func redactSecrets(old, new *manifest.MappingResult) {
+	if (old != nil && old.Kind != "Secret") || (new != nil && new.Kind != "Secret") {
+		return
+	}
+	serializer := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme,
+		scheme.Scheme)
+	var oldSecret, newSecret v1.Secret
+
+	if old != nil {
+		if err := yaml.NewYAMLToJSONDecoder(bytes.NewBufferString(old.Content)).Decode(&oldSecret); err != nil {
+			old.Content = fmt.Sprintf("Error parsing old secret: %s", err)
+		}
+	}
+	if new != nil {
+		if err := yaml.NewYAMLToJSONDecoder(bytes.NewBufferString(new.Content)).Decode(&newSecret); err != nil {
+			new.Content = fmt.Sprintf("Error parsing new secret: %s", err)
+		}
+	}
+	if old != nil {
+		oldSecret.StringData = make(map[string]string, len(oldSecret.Data))
+		for k, v := range oldSecret.Data {
+			if new != nil && bytes.Equal(v, newSecret.Data[k]) {
+				oldSecret.StringData[k] = fmt.Sprintf("REDACTED # (%d bytes)", len(v))
+			} else {
+				oldSecret.StringData[k] = fmt.Sprintf("-------- # (%d bytes)", len(v))
+			}
+		}
+	}
+	if new != nil {
+		newSecret.StringData = make(map[string]string, len(newSecret.Data))
+		for k, v := range newSecret.Data {
+			if old != nil && bytes.Equal(v, oldSecret.Data[k]) {
+				newSecret.StringData[k] = fmt.Sprintf("REDACTED # (%d bytes)", len(v))
+			} else {
+				newSecret.StringData[k] = fmt.Sprintf("++++++++ # (%d bytes)", len(v))
+			}
+		}
+	}
+	// remove Data field now that we are using StringData for serialization
+	var buf bytes.Buffer
+	if old != nil {
+		oldSecret.Data = nil
+		if err := serializer.Encode(&oldSecret, &buf); err != nil {
+
+		}
+		old.Content = getComment(old.Content) + strings.Replace(strings.Replace(buf.String(), "stringData", "data", 1), "  creationTimestamp: null\n", "", 1)
+		buf.Reset() //reuse buffer for new secret
+	}
+	if new != nil {
+		newSecret.Data = nil
+		if err := serializer.Encode(&newSecret, &buf); err != nil {
+
+		}
+		new.Content = getComment(new.Content) + strings.Replace(strings.Replace(buf.String(), "stringData", "data", 1), "  creationTimestamp: null\n", "", 1)
+	}
+}
+
+// return the first line of a string if its a comment.
+// This gives as the # Source: lines from the rendering
+func getComment(s string) string {
+	i := strings.Index(s, "\n")
+	if i < 0 || !strings.HasPrefix(s, "#") {
+		return ""
+	}
+	return s[:i+1]
+
+}
+
+// Releases reindex the content  based on the template names and pass it to Manifests
+func Releases(oldIndex, newIndex map[string]*manifest.MappingResult, suppressedKinds []string, showSecrets bool, context int, output string, to io.Writer) bool {
+	oldIndex = reIndexForRelease(oldIndex)
+	newIndex = reIndexForRelease(newIndex)
+	return Manifests(oldIndex, newIndex, suppressedKinds, showSecrets, context, output, to)
 }
 
 func diffMappingResults(oldContent *manifest.MappingResult, newContent *manifest.MappingResult) []difflib.DiffRecord {
@@ -62,6 +155,7 @@ func diffStrings(before, after string) []difflib.DiffRecord {
 
 func printDiffRecords(suppressedKinds []string, kind string, context int, diffs []difflib.DiffRecord, to io.Writer) {
 	for _, ckind := range suppressedKinds {
+
 		if ckind == kind {
 			str := fmt.Sprintf("+ Changes suppressed on sensitive content of type %s\n", kind)
 			fmt.Fprintf(to, ansi.Color(str, "yellow"))
@@ -136,4 +230,35 @@ func calculateDistances(diffs []difflib.DiffRecord) map[int]int {
 	}
 
 	return distances
+}
+
+// reIndexForRelease based on template names
+func reIndexForRelease(index map[string]*manifest.MappingResult) map[string]*manifest.MappingResult {
+
+	// sort the index to iterate map in the same order
+	var keys []string
+	for key := range index {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	// holds number of object in a single file
+	count := make(map[string]int)
+
+	newIndex := make(map[string]*manifest.MappingResult)
+
+	for key := range keys {
+
+		str := strings.Replace(strings.Split(index[keys[key]].Content, "\n")[0], "# Source: ", "", 1)
+
+		if _, ok := newIndex[str]; ok {
+			count[str]++
+			str += fmt.Sprintf(" %d", count[str])
+			newIndex[str] = index[keys[key]]
+		} else {
+			newIndex[str] = index[keys[key]]
+			count[str]++
+		}
+	}
+	return newIndex
 }
