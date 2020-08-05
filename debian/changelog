@@ -1,3 +1,9 @@
+helm-diff (3.1.2-1) buster-wikimedia; urgency=medium
+
+  * Fix if in postinst
+
+ -- Janis Meybohm <jmeybohm@wikimedia.org>  Wed, 05 Aug 2020 14:22:13 +0200
+
 helm-diff (3.1.2-0) buster-wikimedia; urgency=medium
 
   * New upstream version 3.1.2

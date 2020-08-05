@@ -20,7 +20,7 @@ set -e
 
 case "$1" in
     configure)
-        if [ -n "$2" ] && [ `dpkg --compare-versions "$2" le "2.11.0+3-2+deb10u1"` ]; then
+        if test -n "$2" && dpkg --compare-versions "$2" lt "3.1.2-1"; then
             # Clean up manually created dirs and links from older package version
             rm -rf /etc/helm/plugins/helm-diff/helm-diff \
                 /etc/helm/plugins/helm-diff/bin
