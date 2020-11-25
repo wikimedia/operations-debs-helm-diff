@@ -1,1 +1,2 @@
 plugin.yaml etc/helm/plugins/helm-diff/
+plugin.yaml usr/share/helm/plugins/helm-diff/
