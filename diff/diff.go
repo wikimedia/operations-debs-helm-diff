@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	"github.com/databus23/helm-diff/manifest"
+	"github.com/databus23/helm-diff/v3/manifest"
 )
 
 // Manifests diff on manifests
@@ -23,7 +23,9 @@ func Manifests(oldIndex, newIndex map[string]*manifest.MappingResult, suppressed
 	report.setupReportFormat(output)
 	seenAnyChanges := false
 	emptyMapping := &manifest.MappingResult{}
-	for key, oldContent := range oldIndex {
+	for _, key := range sortedKeys(oldIndex) {
+		oldContent := oldIndex[key]
+
 		if newContent, ok := newIndex[key]; ok {
 			if oldContent.Content != newContent.Content {
 				// modified
@@ -51,7 +53,9 @@ func Manifests(oldIndex, newIndex map[string]*manifest.MappingResult, suppressed
 		}
 	}
 
-	for key, newContent := range newIndex {
+	for _, key := range sortedKeys(newIndex) {
+		newContent := newIndex[key]
+
 		if _, ok := oldIndex[key]; !ok {
 			// added
 			if !showSecrets {
@@ -261,4 +265,16 @@ func reIndexForRelease(index map[string]*manifest.MappingResult) map[string]*man
 		}
 	}
 	return newIndex
+}
+
+func sortedKeys(manifests map[string]*manifest.MappingResult) []string {
+	var keys []string
+
+	for key := range manifests {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }
